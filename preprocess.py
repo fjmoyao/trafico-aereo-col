@@ -1,188 +1,188 @@
-# Realiza la descarga de los archivos y su posterior pre-procesamiento
-import requests
-import os
-import re
-from bs4 import BeautifulSoup
-import pandas as pd
-import warnings
+#Descarga los archivos y genera el esquema de datos inicial, guardando la informacion
+# cruda y con un prepocesamiento inicial en los directorios 'trusted' y 'raw', respectivamente
+from helper_functions import download_files, get_schema
+import polars as pl
 from tqdm import tqdm
-from google.cloud import bigquery
-from google.oauth2 import service_account
+import os
+#Se descargan los archivos y se almacena su ruta
+files = download_files()
 
-if not os.path.isdir("data"):
-    os.mkdir("data")
-    print("Se creo el folder data")
+#Se consideran los archivos hasta el año 2022
+to_delete = [(x, files.index(x) )for x in files if "2023" in x]
+deleted_items=[]
+for file in to_delete:
+    files.pop(file[1])
+    deleted_items.append(file[0].strip("raw"))
+print("Elementos eliminados {}".format(deleted_items))
 
-#Se guarda el url de todos los archivos
-url = 'https://www.aerocivil.gov.co/atencion/estadisticas-de-las-actividades-aeronauticas/bases-de-datos'
-reqs = requests.get(url)
-soup = BeautifulSoup(reqs.text, 'html.parser')
+#Se leen los archivos iterativamente y se concatenan en distintos dfs 
+# agrupandolos por esquemas similares
+if os.path.isfile(os.path.join("trusted","trafico_aereo_1992_2022.csv")):
+    print("El archivo 'trafico_aereo_1992_2022.csv' ya existe")
+else:
+    print("Espere un momento...")
+    #Se crean dataframes vacios con los esquemas predeterminados
+    files16_cols =['Fecha','Sigla Empresa','Origen','Destino','Pasajeros','Trafico','TipoVuelo','Ciudad Origen','Ciudad Destino','Pais Origen','Pais Destino','Nombre Empresa','Apto_Origen','Apto_Destino']
+    df16 = pl.read_excel(os.path.join("raw",'Marzo 2019 V 2.0.xlsx'), read_csv_options= {"skip_rows":3}).select(files16_cols).clear()
 
-url_dict={}
-for link in soup.find_all('a'):
-    if  link.get('href') != None:
-        if "Destino" in link.get('href'):
-            url_dict[link.get('href').split("Destino")[-1].strip()] =link.get('href')
+    files17_cols =['Sigla Empresa','Nombre','Fecha','Año','Número de Mes','Origen','Nombre_duplicated_0','Ciudad Origen','Pais Origen','Destino','Nombre_duplicated_1','Ciudad Destino','Pais Destino','Tráfico (N/I)','Tipo Vuelo','Pasajeros']
+    df17 = pl.read_excel(os.path.join("raw",'2020 Noviembre.xlsx')).select(files17_cols).clear()
 
-#Se descargan los archivos y se almacenan
-print("Descargando archivos: ")
-for key in tqdm(url_dict.keys()):
-    response= requests.get(url_dict[key])
-    path = os.path.join(os.getcwd(), "data", key)
-    open(path, "wb").write(response.content)
+    files18_cols =  ['Sigla Empresa','Nombre','Fecha','Año','Número de Mes','Origen','Apto_Origen','Ciudad Origen','Pais Origen','Destino','Apto_Destino','Ciudad Destino','Pais Destino','Tráfico (N/I)','Tipo Vuelo','Pasajeros']
+    df18 = pl.read_excel(os.path.join("raw",'Agosto 2019.xlsx'), read_csv_options= {"skip_rows":0,"infer_schema_length":500000}).select(files18_cols).clear()
 
+    files19_cols = ['Sigla Empresa','Origen','Destino','Pasajeros','Trafico','TipoVuelo','CargaKg','CorreoKg','Ciudad Origen','Ciudad Destino','APTO_ORIGEN','APTO_DESTINO','Pais Origen','Pais Destino','NOMBRE_EMPRESA','AÑO','MES','Continente Origen','Continente Destino']
+    df19 =pl.read_excel(os.path.join("raw",'Mes 2013.xlsx'), read_csv_options= {"skip_rows":5,"infer_schema_length":500000}).select(files19_cols).clear()
 
-#Se agregan el path a todos los nombres de archivo
-files = [os.path.join(os.getcwd(), "data", x) for x in os.listdir(os.path.join(os.getcwd(),"data"))]
+    files23_cols = ['Fecha','Sigla IATA','Nombre','Origen','Ciudad Origen','Departamento Origen','Pais Origen','Continente Origen','Destino','Sigla IATA_duplicated_0','Nombre_duplicated_0','Ciudad Destino','Departamento Destino','Pais Destino','Continente Destino','Sigla Empresa','Nombre_duplicated_1','Actividad','Pasajeros','Carga (Kg)','Correo (Kg)','Tráfico (N/I)','Tipo Vuelo Agrupado']
+    df23 =pl.read_excel(os.path.join("raw",'Septiembre 2020.xlsx'), read_csv_options= {"skip_rows":0,"infer_schema_length":500000}).select(files23_cols).clear()
 
+    files39_cols= ['Fecha','Sigla Empresa', 'Nombre Empresa', 'Trafico', 'Origen', 'Destino', 'Pasajeros', 'TipoVuelo', 'CargaKg', 'CorreoKg', 'Ciudad Origen','Ciudad Destino','Pais Origen','Pais Destino','Apto_Origen','Apto_Destino']
+    df39 =pl.read_excel(os.path.join("raw",'Ene-Dic 2018.xlsx'), read_csv_options= {"skip_rows":4,"infer_schema_length":500000}).select(files39_cols).clear()
 
-#Se guarda la direccion de los archivos de interes y se eliminan de la lista original 
-esp1 = [x for x in files if ("Noviembre 2019" in x)  ]
-files.pop(files.index(esp1[0]))
-esp2  = [x for x in files if ("Julio 2021" in x)   ] 
-files.pop(files.index(esp2[0]))
-
-#Se almacenan los archivos de interés en un diccionario
-# Estos archivos deben leerse a parte ya que tienen varias hojas 
-data_dict = {}
-data_dict["Noviembre 2019"]= pd.concat([pd.read_excel(esp1[0], "Página1_1", header=1), pd.read_excel(esp1[0], "Página1_2", header=1), pd.read_excel(esp1[0], "Página1_3", header=1) ], ignore_index=True)
-data_dict["Julio 2021"] = pd.read_excel(esp2[0], "DATOS", header=1)
-
-
-#Se agregan los archivos restantes al diccionario
-
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-
-print("Leyendo archivos: ")
-for file in  tqdm(files):
-    data = pd.read_excel(file)
-    data_dict[file.split("\\")[-1]] = data
-
-warnings.filterwarnings("default", category=UserWarning)
-data_dict2 = data_dict 
-
-#Se recorre cada dataframe y se eliminan las filas de header
-for key in tqdm(data_dict.keys()):
-    for index, row in data_dict[key].iterrows():
-        if any([x == "Fecha" for x in row]) | any([x == "Destino" for x in row]) :
-            data_dict[key].columns = data_dict[key].iloc[index,:].str.lower()
-            data_dict[key] = data_dict[key].iloc[index+1:,:].reset_index(drop=True)
-
-            break
-
-#Se pone el nombre de las columnas en minuscula              
-for key in tqdm(data_dict.keys()):
-    data_dict[key].columns = [x.lower() for x in data_dict[key].columns ]
+    schemas =[]
 
 
 
 
-#Se modfica el nombre de las columnas 
-dict_columnas = {'sigla empresa': "sigla", 'sigla iata' : "sigla", "Sigla Empresa":"sigla",
-                   'ciudad origen':'ciudad origen','Ciudad Origen':'ciudad origen',
-                   "número de mes":"mes",
-                   "pais origen":"pais origen",
-                     'tráfico (n/i)':"trafico", 'tráfico':"trafico",
-                     'tipo vuelo agrupado': "tipo vuelo", "tipovuelo": 'tipo vuelo',
-                     "fecha visual":"fecha"}
+    print("Leyendo archivos: ")
+    for archivo in tqdm(files):
+        schema, df = get_schema(archivo)
+        schemas.append(schema)
+        tam_cols =df.columns
+        if len(tam_cols)==16:
+            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
+        elif "Mes 2014" in archivo:
+            df = df.with_columns(pl.lit("/").alias("_")).with_columns(
+                                    pl.concat_str(["AÑO","_", "MES"]).alias("Fecha"))
+            df = df.rename({"Tráfico":"Trafico", "Apto Origen":"Apto_Origen",
+                    "Apto Destino":"Apto_Destino"}) 
+            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
+        elif "Mes 2015" in archivo:  
+            df = df.rename({"Tráfico (N/I)":"Trafico", "Apto Origen":"Apto_Origen",
+                    "Apto Destino":"Apto_Destino", "Tipo Vuelo":"TipoVuelo"}) 
+            df = df.with_columns(pl.lit("/").alias("_")).with_columns(
+                                            pl.concat_str(["Número de Mes","_", "Año"]).alias("Fecha"))
+            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
+        
+        if len(tam_cols)==17:
+            if ("Mes 2014" in archivo) | ("Mes 2015" in archivo) : 
+                continue
+            else:
+                df17 = pl.concat([df17, df.select(files17_cols)],how ="vertical")
 
-print("renombrar columnas: ")
-for key in tqdm(data_dict.keys()):
-  data_dict[key].rename(columns=dict_columnas, inplace=True)  
-  
-  ind = data_dict[key].iloc[:,:].isnull().sum(axis=1) < 10
-  data_dict[key] = data_dict[key].loc[ind,:]
- 
+        if len(tam_cols)==18:
+            if "Diciembre 2019" in archivo:
+                df = df.rename({"Nombre_duplicated_0":"Apto_Origen","Nombre_duplicated_1":"Apto_Destino" })
+                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
 
-#Se definen las columnas que se desean exportar 
-cols = ["origen", "destino", "pasajeros", "trafico", "tipo vuelo",
- "ciudad origen", "ciudad destino", "pais origen", "pais destino", "fecha" ]
+            if "Julio 2019" in archivo:
+                df = df.rename({"Fecha Visual":"Fecha","Apto Origen":"Apto_Origen", "Apto Destino":"Apto_Destino" })
+                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
 
+            if "Mayo 2019" in archivo:
+                df = df.rename({"Fecha Visual":"Fecha","Apto Origen":"Apto_Origen", 
+                    "Apto Destino":"Apto_Destino", "Nombre Empresa":"Nombre",
+                    "Tráfico":"Tráfico (N/I)"})
+                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+            if "Mes 2016" in archivo:
+                df = df.rename({ "Nombre Empresa":"Nombre", "Fecha Visual":"Fecha","Tráfico":"Tráfico (N/I)",
+                    "Mes":"Número de Mes","Apto Origen":"Apto_Origen", "Apto Destino":"Apto_Destino"})
+                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+            if ("Octubre 2019"  in archivo) | ("septiembre  2019" in archivo):
+                df = df.rename({ "Nombre_duplicated_0":"Apto_Origen", "Nombre_duplicated_1":"Apto_Destino"})
+                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+            
+            else:
+                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
 
+        if len(tam_cols)==19:
+            df19 = pl.concat([df19, df.select(files19_cols)],how ="vertical")
 
-data_dict["Mes 1992 - 1993.xlsx"]["fecha"]= data_dict["Mes 1992 - 1993.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1992 - 1993.xlsx"]["mes"].astype("str") 
-data_dict["Mes 1994.xlsx"]["fecha"]= data_dict["Mes 1994.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1994.xlsx"]["mes"].astype("str") 
-data_dict["Mes 1995.xlsx"]["fecha"]= data_dict["Mes 1995.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1995.xlsx"]["mes"].astype("str") 
-data_dict["Mes 1996.xlsx"]["fecha"]= data_dict["Mes 1996.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1996.xlsx"]["mes"].astype("str") 
-data_dict["Mes 1997.xlsx"]["fecha"]= data_dict["Mes 1997.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1997.xlsx"]["mes"].astype("str") 
-data_dict["Mes 1998.xlsx"]["fecha"]= data_dict["Mes 1998.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1998.xlsx"]["mes"].astype("str") 
-data_dict["Mes 1999.xlsx"]["fecha"]= data_dict["Mes 1999.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 1999.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2000.xlsx"]["fecha"]= data_dict["Mes 2000.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2000.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2001.xlsx"]["fecha"]= data_dict["Mes 2001.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2001.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2002.xlsx"]["fecha"]= data_dict["Mes 2002.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2002.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2003.xlsx"]["fecha"]= data_dict["Mes 2003.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2003.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2004.xlsx"]["fecha"]= data_dict["Mes 2004.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2004.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2005.xlsx"]["fecha"]= data_dict["Mes 2005.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2005.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2006.xlsx"]["fecha"]= data_dict["Mes 2006.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2006.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2007.xlsx"]["fecha"]= data_dict["Mes 2007.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2007.xlsx"]["mes"].astype("str")
-data_dict["Mes 2008.xlsx"]["fecha"]= data_dict["Mes 2008.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2008.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2009.xlsx"]["fecha"]= data_dict["Mes 2009.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2009.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2010.xlsx"]["fecha"]= data_dict["Mes 2010.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2010.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2011.xlsx"]["fecha"]= data_dict["Mes 2011.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2011.xlsx"]["mes"].astype("str")
-data_dict["Mes 2012.xlsx"]["fecha"]= data_dict["Mes 2012.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2012.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2013.xlsx"]["fecha"]= data_dict["Mes 2013.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2013.xlsx"]["mes"].astype("str") 
-data_dict["Mes 2014.xlsx"]["fecha"]= data_dict["Mes 2014.xlsx"]["mes"].astype("str") + "-" +  data_dict["Mes 2014.xlsx"]["año"].astype("str") 
-data_dict["Mes 2015.xlsx"]["fecha"]= data_dict["Mes 2015.xlsx"]["año"].astype("str") + "-" +  data_dict["Mes 2015.xlsx"]["mes"].astype("str")
+        if len(tam_cols)==23:
+            df23 = pl.concat([df23, df.select(files23_cols)],how ="vertical")
 
+        if len(tam_cols)==39:
+            df39 = pl.concat([df39, df.select(files39_cols)],how ="vertical")
+#---------------------------------------------------------------------------------------------------------------------------
+    #Se definen las columnas a utilizar y se seleccionan solamente estas para cada grupo de dataframes
+    cols = ['Fecha','Sigla Empresa','Origen','Destino','Pasajeros','Trafico','TipoVuelo','Ciudad Origen','Ciudad Destino','Pais Origen','Pais Destino','Nombre Empresa','Apto_Origen','Apto_Destino']
+                
+    df17 = df17.rename({"Nombre_duplicated_0":"Apto_Origen","Nombre_duplicated_1":"Apto_Destino",
+                        'Tráfico (N/I)':"Trafico", "Nombre":"Nombre Empresa",
+                        'Tipo Vuelo':'TipoVuelo' }).select(cols)
 
-#Se concatenan las diferentes tablas
-df = pd.DataFrame()
-for key in tqdm(data_dict.keys()):
-  df = pd.concat([df,data_dict[key].loc[:,cols]])
+    df18 = df18.rename({'Tráfico (N/I)':"Trafico", "Nombre":"Nombre Empresa",
+                        'Tipo Vuelo':'TipoVuelo' }).select(cols)
 
-print("Se han concatenado las tablas")
+    df19 = df19.rename({ 'NOMBRE_EMPRESA':"Nombre Empresa",'APTO_ORIGEN':'Apto_Origen',
+                        'APTO_DESTINO':'Apto_Destino'}).with_columns(pl.lit("/").alias("_")).with_columns(
+                                            pl.concat_str(["MES","_", "AÑO"]).alias("Fecha")).select(cols)
 
+    df23 = df23.rename({"Nombre":"Apto_Origen","Nombre_duplicated_0":"Apto_Destino",
+                        'Tráfico (N/I)':"Trafico", "Nombre_duplicated_1":"Nombre Empresa",
+                        'Tipo Vuelo Agrupado':'TipoVuelo' }).select(cols)
+    df39 = df39.select(cols)
+#------------------------------------------------------------------------------------------------------------------------------
+    #Concatenacion de toda la informacion
+    data_consolidada = pl.concat([df16, df17, df18, df19, df23, df39],how ="vertical").with_columns(
+                                    pl.col("Fecha").
+                                                str.replace_all("Ene","01").
+                                                str.replace_all("Feb","02").
+                                                str.replace_all("Mar","03").
+                                                str.replace_all("Abr","04").
+                                                str.replace_all("May","05").
+                                                str.replace_all("Jun","06").
+                                                str.replace_all("Jul","07").
+                                                str.replace_all("Ago","08").
+                                                str.replace_all("Sep","09").
+                                                str.replace_all("Oct","10").
+                                                str.replace_all("Nov","11").
+                                                str.replace_all("Dic","12").
+                                                str.replace_all("Jan","01").
+                                                str.replace_all("Apr","04").
+                                                str.replace_all("Aug","08").
+                                                str.replace_all("Dec","12")
+                                                )
+    
+    #Se corrige el formato de fecha
+    data_consolidada = data_consolidada.with_columns(
+                    pl.col("Fecha").str.lengths().alias("len")).with_columns(
+                                pl.
+                                when(pl.col("len")==6).
+                                then(pl.concat_str([pl.col("Fecha").str.split(by="/").arr.get(1), pl.lit("-"),
+                                                    pl.col("Fecha").str.split(by="/").arr.get(0), pl.lit("-"),
+                                                    pl.lit("01")])).
+                                when((pl.col("len")==8) & pl.col("Fecha").str.contains(r"[0-9]-[0-9]+")).
+                                then(pl.concat_str([pl.lit("20"), pl.col("Fecha").str.slice(-2),
+                                                    pl.lit("-"),  pl.col("Fecha").str.slice(3,2), 
+                                                    pl.lit("-"),  pl.col("Fecha").str.slice(0,2)])).
 
-df.loc[df.fecha.astype("str").str.len() < 19,"fecha"] = (df.loc[df.fecha.astype("str").str.len() < 19,"fecha"].str.replace("Jul","07").str.
-                replace("May","05").str.replace("Jun","06").str.replace("Ago","08").
-                str.replace("Ene","01").str.replace("Feb","02").str.replace("Mar","03").
-                str.replace("Abr","04").str.replace("Sep","09").str.replace("Oct","10").
-                str.replace("Nov","11").str.replace("Dic","12"))
-df.loc[df.fecha.astype("str").str.len() < 19,"fecha"] = df.loc[df.fecha.astype("str").str.len() < 19,"fecha"] + "-01"
-
-
-df["fecha"] = pd.to_datetime(df.fecha, yearfirst=True)
-df["pasajeros"] = df["pasajeros"].astype("Int64")
-df["destino"] = df["destino"].astype("str")
-df["trafico"] = df["trafico"].astype("str")
-df["tipo vuelo"] = df["tipo vuelo"].astype("str")
-
-df.columns = [x.replace(" ","_") for x in df.columns]
-
-
-
-
-
-#Se carga el archivo a BQ
-cred_path = 'path_to_serviceaccount_creds.json'
-credentials = service_account.Credentials.from_service_account_file(cred_path)
-
-project_id = 'project_id'
-client = bigquery.Client(credentials= credentials,project=project_id)
-
-
-job_config = bigquery.LoadJobConfig()
-table_id = 'table_id'
-job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-#time_partitioning = bigquery.table.TimePartitioning(type_=bigquery.TimePartitioningType.YEAR,field="fecha")
-#job_config.time_partitioning =  time_partitioning
-job = client.load_table_from_dataframe(df, table_id, job_config=job_config)  # Make an API request.
-job.result()  # Wait for the job to complete.
-
-
-
-table = client.get_table(table_id)  # Make an API request.
-print(
-    "Loaded {} rows and {} columns to {}".format(
-        table.num_rows, len(table.schema), table_id
+                                when((pl.col("len")==17)).
+                                then(pl.concat_str([pl.lit("20"), pl.col("Fecha").str.slice(6,2),
+                                                    pl.lit("-"),  pl.col("Fecha").str.slice(3,2), 
+                                                    pl.lit("-"),  pl.col("Fecha").str.slice(0,2)])).
+                                when((pl.col("len")==7) & pl.col("Fecha").str.contains(r"[0-9]/[0-9]+")).
+                                then(pl.concat_str([pl.col("Fecha").str.slice(-4),
+                                                    pl.lit("-"), pl.col("Fecha").str.slice(0,2), 
+                                                    pl.lit("-"), pl.lit("01")])).
+                                when((pl.col("len")==7) & pl.col("Fecha").str.contains(r"[0-9]-[0-9]+")).
+                                then(pl.concat_str([pl.col("Fecha").str.slice(0,4),
+                                                    pl.lit("-"), pl.col("Fecha").str.slice(-2), 
+                                                    pl.lit("-"), pl.lit("01")])).
+                                                
+                                otherwise(pl.col("Fecha")).alias("Fecha_corregida")
     )
-)
 
+    #Se convierte la columna de texto a fecha
+    data_consolidada = data_consolidada.with_columns(pl.col("Fecha_corregida").str.strptime(pl.Date, fmt="%Y-%m-%d"))
 
-for file in os.listdir(os.path.join(os.getcwd(), "data")):
-    os.remove(os.path.join(os.getcwd(), "data", file))
+    #Se comprueba que no exista el folder 'trusted'
+    if not os.path.isdir("trusted"):
+        os.mkdir("trusted")
+        print("Se creo el folder trusted")
+    else:
+        print("El folder 'trusted' ya existe en este directorio")
 
-os.rmdir('data') 
-#Se exporta el dataset como csv
-df.to_csv("trafico_col.csv")
+    data_consolidada.write_csv(os.path.join("trusted","trafico_aereo_1992_2022.csv"))
+    print("Se creó el archivo 'trafico_aereo_1992_2022.csv' ")
