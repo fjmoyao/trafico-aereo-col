@@ -1,3 +1,7 @@
 data
 key_cred.json
 trafico_col.csv
+raw
+trusted
+__pycache__
+borrador.*
