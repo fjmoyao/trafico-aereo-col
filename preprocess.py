@@ -176,7 +176,23 @@ else:
 
     #Se convierte la columna de texto a fecha
     data_consolidada = data_consolidada.with_columns(pl.col("Fecha_corregida").str.strptime(pl.Date, fmt="%Y-%m-%d"))
-
+    data_consolidada = data_consolidada.select(
+        [pl.col("Fecha_corregida").alias("Fecha"),
+         pl.col("Sigla Empresa"),
+         pl.col("Origen"),
+         pl.col("Destino"),
+         pl.col("Pasajeros"),
+         pl.col("Trafico"),
+         pl.col("TipoVuelo"),
+         pl.col("Ciudad Origen"),
+         pl.col("Ciudad Destino"),
+         pl.col("Pais Origen"),
+         pl.col("Pais Destino"),
+         pl.col("Nombre Empresa"),
+         pl.col("Apto_Origen"),
+         pl.col("Apto_Destino")       
+        ]
+    )
     #Se comprueba que no exista el folder 'trusted'
     if not os.path.isdir("trusted"):
         os.mkdir("trusted")
