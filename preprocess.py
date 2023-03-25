@@ -43,67 +43,77 @@ else:
     schemas =[]
 
 
-
-
+    #Se leen los archivos iterativamente y se concatenan en distintos dfs 
+    # agrupandolos por esquemas similares
     print("Leyendo archivos: ")
     for archivo in tqdm(files):
         schema, df = get_schema(archivo)
         schemas.append(schema)
         tam_cols =df.columns
-        if len(tam_cols)==16:
-            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
-        elif "Mes 2014" in archivo:
+        #print(archivo)
+        #print(len(df.columns))
+        if "Mes 2014" in archivo:
             df = df.with_columns(pl.lit("/").alias("_")).with_columns(
-                                    pl.concat_str(["AÑO","_", "MES"]).alias("Fecha"))
-            df = df.rename({"Tráfico":"Trafico", "Apto Origen":"Apto_Origen",
-                    "Apto Destino":"Apto_Destino"}) 
-            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
-        elif "Mes 2015" in archivo:  
-            df = df.rename({"Tráfico (N/I)":"Trafico", "Apto Origen":"Apto_Origen",
-                    "Apto Destino":"Apto_Destino", "Tipo Vuelo":"TipoVuelo"}) 
-            df = df.with_columns(pl.lit("/").alias("_")).with_columns(
-                                            pl.concat_str(["Número de Mes","_", "Año"]).alias("Fecha"))
+                                pl.concat_str(["AÑO","_", "MES"]).alias("Fecha")
+                                ).rename({"Tráfico":"Trafico", "Apto Origen":"Apto_Origen",
+                                            "Apto Destino":"Apto_Destino"}) 
             df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
         
-        if len(tam_cols)==17:
-            if ("Mes 2014" in archivo) | ("Mes 2015" in archivo) : 
-                continue
-            else:
-                df17 = pl.concat([df17, df.select(files17_cols)],how ="vertical")
+        elif "Mes 2015" in archivo:  
+            df = df.rename({"Tráfico (N/I)":"Trafico", "Apto Origen":"Apto_Origen",
+                            "Apto Destino":"Apto_Destino", "Tipo Vuelo":"TipoVuelo"}
+                            ).with_columns(pl.lit("/").alias("_")).with_columns(
+                            pl.concat_str(["Número de Mes","_", "Año"]).alias("Fecha"))
+            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
 
-        if len(tam_cols)==18:
-            if "Diciembre 2019" in archivo:
-                df = df.rename({"Nombre_duplicated_0":"Apto_Origen","Nombre_duplicated_1":"Apto_Destino" })
-                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+        elif "Diciembre 2019" in archivo:
+            df = df.rename({"Nombre_duplicated_0":"Apto_Origen","Nombre_duplicated_1":"Apto_Destino" })
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
 
-            if "Julio 2019" in archivo:
-                df = df.rename({"Fecha Visual":"Fecha","Apto Origen":"Apto_Origen", "Apto Destino":"Apto_Destino" })
-                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+        elif "Mayo 2019" in archivo:
+            df = df.rename({"Fecha Visual":"Fecha","Apto Origen":"Apto_Origen", 
+                "Apto Destino":"Apto_Destino", "Nombre Empresa":"Nombre",
+                "Tráfico":"Tráfico (N/I)"})
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+        
+        elif "Julio 2019" in archivo:
+            df = df.rename({"Fecha Visual":"Fecha","Apto Origen":"Apto_Origen", "Apto Destino":"Apto_Destino" })
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
 
-            if "Mayo 2019" in archivo:
-                df = df.rename({"Fecha Visual":"Fecha","Apto Origen":"Apto_Origen", 
-                    "Apto Destino":"Apto_Destino", "Nombre Empresa":"Nombre",
-                    "Tráfico":"Tráfico (N/I)"})
-                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
-            if "Mes 2016" in archivo:
-                df = df.rename({ "Nombre Empresa":"Nombre", "Fecha Visual":"Fecha","Tráfico":"Tráfico (N/I)",
+        elif "Mes 2016" in archivo:
+            df = df.rename({ "Nombre Empresa":"Nombre", "Fecha Visual":"Fecha","Tráfico":"Tráfico (N/I)",
                     "Mes":"Número de Mes","Apto Origen":"Apto_Origen", "Apto Destino":"Apto_Destino"})
-                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
-            if ("Octubre 2019"  in archivo) | ("septiembre  2019" in archivo):
-                df = df.rename({ "Nombre_duplicated_0":"Apto_Origen", "Nombre_duplicated_1":"Apto_Destino"})
-                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
-            
-            else:
-                df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
 
-        if len(tam_cols)==19:
+        elif ("Octubre 2019"  in archivo):
+            df = df.rename({ "Nombre_duplicated_0":"Apto_Origen", "Nombre_duplicated_1":"Apto_Destino"})
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+
+        elif ("septiembre  2019" in archivo):
+            df = df.rename({ "Nombre_duplicated_0":"Apto_Origen", "Nombre_duplicated_1":"Apto_Destino"})
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+        
+        elif len(tam_cols)==16:
+            df16 = pl.concat([df16, df.select(files16_cols)],how ="vertical")
+
+        elif len(tam_cols)==17:
+            #print(len(df17.columns))
+            #print(len(df.select(files17_cols).columns))
+            df17 = pl.concat([df17, df.select(files17_cols)],how ="vertical")
+
+        elif len(tam_cols)==18:
+            df18 = pl.concat([df18, df.select(files18_cols)],how ="vertical")
+
+        elif len(tam_cols)==19:
             df19 = pl.concat([df19, df.select(files19_cols)],how ="vertical")
 
-        if len(tam_cols)==23:
+        elif len(tam_cols)==23:
             df23 = pl.concat([df23, df.select(files23_cols)],how ="vertical")
 
-        if len(tam_cols)==39:
+        elif len(tam_cols)==39:
             df39 = pl.concat([df39, df.select(files39_cols)],how ="vertical")
+
+
 #---------------------------------------------------------------------------------------------------------------------------
     #Se definen las columnas a utilizar y se seleccionan solamente estas para cada grupo de dataframes
     cols = ['Fecha','Sigla Empresa','Origen','Destino','Pasajeros','Trafico','TipoVuelo','Ciudad Origen','Ciudad Destino','Pais Origen','Pais Destino','Nombre Empresa','Apto_Origen','Apto_Destino']
