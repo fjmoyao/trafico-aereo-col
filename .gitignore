@@ -5,3 +5,5 @@ raw
 trusted
 __pycache__
 borrador.*
+misc
+.ipynb_checkpoints
