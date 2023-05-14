@@ -8,12 +8,21 @@ import os
 files = download_files()
 
 #Se consideran los archivos hasta el año 2022
-to_delete = [(x, files.index(x) )for x in files if "2023" in x]
-deleted_items=[]
-for file in to_delete:
-    files.pop(file[1])
-    deleted_items.append(file[0].strip("raw"))
-print("Elementos eliminados {}".format(deleted_items))
+#to_delete = [(x, files.index(x) )for x in files if "2023" in x]
+#deleted_items=[]
+#for file in to_delete:
+#    files.pop(file[1])
+#    deleted_items.append(file[0].strip("raw"))
+#print("Elementos eliminados {}".format(deleted_items))
+
+def delete_strings_from_list(strings_to_delete, my_list):
+    for string in strings_to_delete:
+        if string in my_list:
+            my_list.remove(string)
+
+to_delete = [x for x in files if "2023" in x]
+delete_strings_from_list(strings_to_delete=to_delete, my_list=files)
+print("Elementos eliminados {}".format(to_delete))
 
 #Se leen los archivos iterativamente y se concatenan en distintos dfs 
 # agrupandolos por esquemas similares
