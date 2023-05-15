@@ -10,7 +10,7 @@ Siga los pasos a continuación para instalar y configurar el proyecto en su máq
    git clone https://github.com/fjmoyao/trafico-aereo-col.git
    ```
 2. Instale los requisitos necesarios:
-      ```
+   ```
    pip install -r requirements.txt
    ```
    
@@ -28,7 +28,7 @@ Estos cuadernos contienen el código necesario para el procesamiento de datos, a
 Alternativamente, puede utilizar la aplicación para interactuar directamente con los modelos:
    ```
    streamlit run app.py
-      ```
+   ```
 
 La aplicación le permitirá realizar predicciones y explorar los resultados de manera interactiva.
 
