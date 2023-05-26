@@ -24,6 +24,7 @@ Ejecute los cuadernos en el siguiente orden:
 3. Model Building 1
 4. Model Building 2
 5. NonParametric2
+   
 Estos cuadernos contienen el código necesario para el procesamiento de datos, análisis exploratorio y construcción de modelos.
 
 **Nota:** La ejecución de los modelos no paramétricos se puede realizar directamente desde el notebook NonParametric2 sin la necesidad de ejecutar ningún otro archivo.
