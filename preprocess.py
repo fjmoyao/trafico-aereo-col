@@ -4,6 +4,7 @@ from helper_functions import download_files, get_schema
 import polars as pl
 from tqdm import tqdm
 import os
+
 #Se descargan los archivos y se almacena su ruta
 files = download_files()
 
