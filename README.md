@@ -23,14 +23,10 @@ Ejecute los cuadernos en el siguiente orden:
 2. Exploratory Data Analysis (EDA)
 3. Model Building 1
 4. Model Building 2
+5. NonParametric2
 Estos cuadernos contienen el código necesario para el procesamiento de datos, análisis exploratorio y construcción de modelos.
 
-Alternativamente, puede utilizar la aplicación para interactuar directamente con los modelos:
-   ```
-   streamlit run app.py
-   ```
-
-La aplicación le permitirá realizar predicciones y explorar los resultados de manera interactiva.
+**Nota:** La ejecución de los modelos no paramétricos se puede realizar directamente desde el notebook NonParametric2 sin la necesidad de ejecutar ningún otro archivo.
 
 ## Uso de Big Data y Bibliotecas
 
